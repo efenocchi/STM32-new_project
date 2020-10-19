@@ -23,7 +23,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "semphr.h"
+#include "stm32l475e_iot01.h"
+#include "stm32l475e_iot01_tsensor.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #define TERMINAL_USE
@@ -139,7 +142,7 @@ osThreadId_t myTask02Handle;
 const osThreadAttr_t myTask02_attributes = {
   .name = "myTask02",
   .priority = (osPriority_t) osPriorityNormal,
-  .stack_size = 96 * 4
+  .stack_size = 968 * 4
 };
 
 /* Definitions for proximityThread */
@@ -254,7 +257,7 @@ int main(void)
 		MX_USART1_UART_Init();
 		MX_USART3_UART_Init();
 		MX_USB_OTG_FS_PCD_Init();
-
+		BSP_TSENSOR_Init();
 
 
 
@@ -275,7 +278,7 @@ int main(void)
 	  /* USER CODE BEGIN RTOS_THREADS */
 	  //inizialize the structure
 	  inizialize(&sharedValues);
-	  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+	  //defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 	  myTask02Handle = osThreadNew(StartTask02, NULL, &myTask02_attributes);
 	  //proximityThreadHandle = osThreadNew(Proximity_Test, NULL, &proximityThread_attributes);
 
@@ -1085,14 +1088,14 @@ void stampa(struct sharedValues_t *sv){
 		int val1,val2;
 		char msg[30] = "";
 		temperature = BSP_TSENSOR_ReadTemp();
-
+		printf("Thread TTTTTTTTTTTTTTTTTTt\n");
 		val1 = temperature;
 		separa = temperature - val1;
 		val2 = trunc(separa * 100);
 		sv->temperature_val1 = val1;
 		sv->temperature_val2 = val2;
 		snprintf(msg,30," TEMPERATURE = %d.%02d\n\r", val1, val2);
-		//HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
 
 
   osSemaphoreRelease(sv->secondo);
@@ -1118,13 +1121,14 @@ void aggiorna_contatore(struct sharedValues_t *sv){
 
 	//prendo il mutex
 	osSemaphoreAcquire(sv->primo, portMAX_DELAY);
-			prox_value = VL53L0X_PROXIMITY_GetDistance();
-			printf("DISTANCE is = %d mm \n", prox_value);
-			//printf("DISTANCE is = %d mm \n", prox_value);
-			sv->proximity = prox_value;
-			printf("DISTANCEEEEEEEEEEEEEEE %d", sv->proximity);
-			HAL_Delay(1000);
-			osSemaphoreRelease(sv->primo);
+
+	prox_value = VL53L0X_PROXIMITY_GetDistance();
+	printf("DISTANCE is = %d mm \n", prox_value);
+	//printf("DISTANCE is = %d mm \n", prox_value);
+	sv->proximity = prox_value;
+
+	osSemaphoreRelease(sv->primo);
+
 }
 
 void Proximity_Test(void *arguments)
@@ -1139,6 +1143,7 @@ void Proximity_Test(void *arguments)
   {
 
 	  	  aggiorna_contatore(&sharedValues);
+	  	  HAL_Delay(1000);
 
   }
 

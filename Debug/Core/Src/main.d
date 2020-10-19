@@ -54,7 +54,12 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h \
- ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h \
+ C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01_tsensor.h \
+ C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01.h \
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\hts221\hts221.h \
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\hsensor.h \
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h
 
 ../Core/Inc/main.h:
 
@@ -181,3 +186,13 @@ C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l
 ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h:
 
 ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h:
+
+C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01_tsensor.h:
+
+C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01.h:
+
+c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\hts221\hts221.h:
+
+c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\hsensor.h:
+
+c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h:
