@@ -27,6 +27,8 @@
 #include "semphr.h"
 #include "stm32l475e_iot01.h"
 #include "stm32l475e_iot01_tsensor.h"
+#include "stm32l475e_iot01_psensor.h"
+#include "stm32l475e_iot01_hsensor.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #define TERMINAL_USE
@@ -142,7 +144,7 @@ osThreadId_t myTask02Handle;
 const osThreadAttr_t myTask02_attributes = {
   .name = "myTask02",
   .priority = (osPriority_t) osPriorityNormal,
-  .stack_size = 968 * 4
+  .stack_size = 232 * 4
 };
 
 /* Definitions for proximityThread */
@@ -155,9 +157,12 @@ const osThreadAttr_t proximityThread_attributes = {
 /* USER CODE BEGIN PV */
 
 struct sharedValues_t{
-float temperature_val1;
-float temperature_val2;
-float humidity;
+int temperature_val1;
+int temperature_val2;
+float humidity_val1;
+float humidity_val2;
+float pressure_val1;
+float pressure_val2;
 int proximity;
 
 osSemaphoreId_t primo;
@@ -198,11 +203,14 @@ void Proximity_Test(void *arguments);
 
 
 void inizialize(struct sharedValues_t *sv){
-	sv->humidity=0;
-	sv->proximity=0;
+
 	sv->temperature_val1=0;
 	sv->temperature_val2=0;
-
+	sv->humidity_val1=0;
+	sv->humidity_val2=0;
+	sv->pressure_val1=0;
+	sv->pressure_val2=0;
+	sv->proximity=0;
 
 	sv->primo = osSemaphoreNew(1, 1, NULL);
 	sv->secondo = osSemaphoreNew(1, 1, NULL);
@@ -258,8 +266,9 @@ int main(void)
 		MX_USART3_UART_Init();
 		MX_USB_OTG_FS_PCD_Init();
 		BSP_TSENSOR_Init();
-
-
+		BSP_PSENSOR_Init();
+		BSP_HSENSOR_Init();
+		VL53L0X_PROXIMITY_Init();
 
 
 	  TERMOUT("****** WIFI Module in TCP Client mode demonstration ****** \n\n");
@@ -278,9 +287,9 @@ int main(void)
 	  /* USER CODE BEGIN RTOS_THREADS */
 	  //inizialize the structure
 	  inizialize(&sharedValues);
-	  //defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+	  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 	  myTask02Handle = osThreadNew(StartTask02, NULL, &myTask02_attributes);
-	  //proximityThreadHandle = osThreadNew(Proximity_Test, NULL, &proximityThread_attributes);
+	  proximityThreadHandle = osThreadNew(Proximity_Test, NULL, &proximityThread_attributes);
 
 
 	  /* USER CODE END RTOS_THREADS */
@@ -921,6 +930,7 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 			uint16_t Datalen;
 			uint8_t  MAC_Addr[6];
 			uint8_t  IP_Addr[4];
+			char msg[30] = "";
 
 			int32_t Socket = -1;
 
@@ -1015,30 +1025,31 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 					  if(ritorno==45){
 						  ret = WIFI_SendData(Socket, TxData, sizeof(TxData), &Datalen, WIFI_WRITE_TIMEOUT);
 					  }
-					  if(ritorno == 50){
-						  uint8_t TxData2[] = "Numero 50\n";
-						  ret = WIFI_SendData(Socket, TxData2, sizeof(TxData2), &Datalen, WIFI_WRITE_TIMEOUT);
-					  }
 
+					  //PROXIMITY
 					  if(ritorno == 0){
-
-
-
-						  //itoa ( sv->proximity, text, 10);
-						  snprintf(text, 30, "Valore temperatura: %d \n", sv->proximity); // puts string into buffer
-
-
+						  snprintf(text, 30, "Proximity value: %d \n", sv->proximity); // puts string into buffer
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-
-
 					  }
+
+					  //TEMPERATURE
 					  if(ritorno==1){
-						  char msg[30] = "";
-
-						  snprintf(text,30," TEMPERATURE = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
+						  snprintf(text,30," Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-
 					  }
+
+					  //HUMIDITY
+					  if(ritorno==2){
+						  snprintf(text,30," Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
+						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+					  }
+
+					  //PRESSSURE
+					  if(ritorno==3){
+						  snprintf(text,30," Pressure = %d.%02d\n\r", sv->pressure_val1, sv->pressure_val2);
+						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+					  }
+
 
 						  if (ret != WIFI_STATUS_OK)
 					  {
@@ -1081,21 +1092,45 @@ void StartDefaultTask(void *arguments)
 
 void stampa(struct sharedValues_t *sv){
 	 osSemaphoreAcquire(sv->secondo, portMAX_DELAY);
-		printf("Thread 2\n");
 
-		float temperature;
+		float temperature,humidity,pressure;
 		float separa = 0;
 		int val1,val2;
-		char msg[30] = "";
+		char msg_t[30] = "";
+		char msg_h[30] = "";
+		char msg_p[30] = "";
+
 		temperature = BSP_TSENSOR_ReadTemp();
-		printf("Thread TTTTTTTTTTTTTTTTTTt\n");
+		humidity = BSP_HSENSOR_ReadHumidity();
+		pressure = BSP_PSENSOR_ReadPressure();
+
 		val1 = temperature;
 		separa = temperature - val1;
 		val2 = trunc(separa * 100);
 		sv->temperature_val1 = val1;
 		sv->temperature_val2 = val2;
-		snprintf(msg,30," TEMPERATURE = %d.%02d\n\r", val1, val2);
-		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+		snprintf(msg_t,30," TEMPERATURE = %d.%02d\n\r", val1, val2);
+
+
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg_t, sizeof(msg_t), 1000);
+
+		val1 = humidity;
+		separa = humidity - val1;
+		val2 = trunc(separa * 100);
+		sv->humidity_val1 = val1;
+		sv->humidity_val2 = val2;
+		snprintf(msg_h,30," humidity = %d.%02d\n\r", val1, val2);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg_h, sizeof(msg_h), 1000);
+
+
+		val1 = pressure;
+		separa = pressure - val1;
+		val2 = trunc(separa * 100);
+		sv->pressure_val1 = val1;
+		sv->pressure_val2 = val2;
+		snprintf(msg_p,30," pressure = %d.%02d\n\r", val1, val2);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg_p, sizeof(msg_p), 1000);
+
 
 
   osSemaphoreRelease(sv->secondo);
@@ -1124,9 +1159,9 @@ void aggiorna_contatore(struct sharedValues_t *sv){
 
 	prox_value = VL53L0X_PROXIMITY_GetDistance();
 	printf("DISTANCE is = %d mm \n", prox_value);
-	//printf("DISTANCE is = %d mm \n", prox_value);
-	sv->proximity = prox_value;
 
+	sv->proximity = prox_value;
+	//printf("DISTANCE is = %d mm \n", prox_value);
 	osSemaphoreRelease(sv->primo);
 
 }
@@ -1137,7 +1172,7 @@ void Proximity_Test(void *arguments)
   printf("\n*************************************************************\n");
   printf("\n********************** Proximity Test ************************\n");
   printf("\n*************************************************************\n\n");
-  VL53L0X_PROXIMITY_Init();
+
 
   while(1)
   {

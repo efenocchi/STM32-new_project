@@ -59,7 +59,12 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01.h \
  c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\hts221\hts221.h \
  c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\hsensor.h \
- c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h \
+ C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01_psensor.h \
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\lps22hb\lps22hb.h \
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\psensor.h \
+ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h \
+ C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01_hsensor.h
 
 ../Core/Inc/main.h:
 
@@ -196,3 +201,13 @@ c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\hts221\ht
 c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\hsensor.h:
 
 c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h:
+
+C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01_psensor.h:
+
+c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\lps22hb\lps22hb.h:
+
+c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\psensor.h:
+
+c:\users\emanuele\stm32cubeide\workspace_1.4.0\base\drivers\components\common\tsensor.h:
+
+C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l475e_iot01_hsensor.h:
