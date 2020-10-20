@@ -41,6 +41,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/vl53l0x_types.h ../Core/Inc/vl53l0x_api.h \
  ../Core/Inc/vl53l0x_api_strings.h ../Core/Inc/vl53l0x_platform.h \
  ../Core/Inc/vl53l0x_platform_log.h ../Core/Inc/vl53l0x_tof.h \
+ ../Core/Inc/psw.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h \
  ../Core/Inc/FreeRTOSConfig.h \
@@ -163,6 +164,8 @@ C:/Users/Emanuele/STM32CubeIDE/workspace_1.4.0/base/Drivers/B-L475E-IOT01/stm32l
 ../Core/Inc/vl53l0x_platform_log.h:
 
 ../Core/Inc/vl53l0x_tof.h:
+
+../Core/Inc/psw.h:
 
 ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h:
 

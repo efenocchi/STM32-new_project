@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "psw.h"
 #include "cmsis_os.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,8 +35,9 @@
 #define TERMINAL_USE
 
 /* Update SSID and PASSWORD with own Access point settings */
-#define SSID     ""
-#define PASSWORD ""
+
+//#define SSID
+//#define PASSWORD ""
 
 
 uint8_t RemoteIP[] = {192,168,1,4};
@@ -1044,9 +1046,9 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
 					  }
 
-					  //PRESSSURE
+					  //PRESSSURE 1mBar = 1hPa (100Pa)
 					  if(ritorno==3){
-						  snprintf(text,30," Pressure = %d.%02d\n\r", sv->pressure_val1, sv->pressure_val2);
+						  snprintf(text,30," Pressure = %d.%02d hPa\n\r", sv->pressure_val1, sv->pressure_val2);
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
 					  }
 
@@ -1103,6 +1105,11 @@ void stampa(struct sharedValues_t *sv){
 		temperature = BSP_TSENSOR_ReadTemp();
 		humidity = BSP_HSENSOR_ReadHumidity();
 		pressure = BSP_PSENSOR_ReadPressure();
+
+		if(temperature>29)
+					HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+
+
 
 		val1 = temperature;
 		separa = temperature - val1;
@@ -1161,7 +1168,8 @@ void aggiorna_contatore(struct sharedValues_t *sv){
 	printf("DISTANCE is = %d mm \n", prox_value);
 
 	sv->proximity = prox_value;
-	//printf("DISTANCE is = %d mm \n", prox_value);
+	if(prox_value<100)
+		HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
 	osSemaphoreRelease(sv->primo);
 
 }
