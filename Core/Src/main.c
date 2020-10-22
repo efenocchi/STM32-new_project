@@ -134,6 +134,14 @@ UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
+/* Definitions for dewpointTask */
+osThreadId_t dewpointTaskHandle;
+const osThreadAttr_t dewpointTask_attributes = {
+  .name = "dewpointTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 232 * 4
+};
+
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
@@ -166,6 +174,7 @@ float humidity_val2;
 float pressure_val1;
 float pressure_val2;
 int proximity;
+int dewpoint;
 
 osSemaphoreId_t primo;
 osSemaphoreId_t secondo;
@@ -194,6 +203,8 @@ static void VL53L0X_PROXIMITY_Init(void);
 void StartDefaultTask(void *arguments);
 void StartTask02(void *arguments);
 void Proximity_Test(void *arguments);
+void StartDewpointTask(void *arguments);
+
 
 /* USER CODE BEGIN PFP */
 
@@ -213,6 +224,8 @@ void inizialize(struct sharedValues_t *sv){
 	sv->pressure_val1=0;
 	sv->pressure_val2=0;
 	sv->proximity=0;
+	sv->dewpoint=0;
+
 
 	sv->primo = osSemaphoreNew(1, 1, NULL);
 	sv->secondo = osSemaphoreNew(1, 1, NULL);
@@ -292,7 +305,7 @@ int main(void)
 	  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 	  myTask02Handle = osThreadNew(StartTask02, NULL, &myTask02_attributes);
 	  proximityThreadHandle = osThreadNew(Proximity_Test, NULL, &proximityThread_attributes);
-
+	  dewpointTaskHandle = osThreadNew(StartDewpointTask, NULL, &dewpointTask_attributes);
 
 	  /* USER CODE END RTOS_THREADS */
 
@@ -850,6 +863,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE END 4 */
 
 
+
 static void VL53L0X_PROXIMITY_Init(void)
 {
   uint16_t vl53l0x_id = 0;
@@ -1052,6 +1066,12 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
 					  }
 
+					  if(ritorno==4){
+						  snprintf(text,30," Dewpoint = %d\n\r", sv->dewpoint);
+						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+
+		              }
+
 
 						  if (ret != WIFI_STATUS_OK)
 					  {
@@ -1119,7 +1139,7 @@ void stampa(struct sharedValues_t *sv){
 		snprintf(msg_t,30," TEMPERATURE = %d.%02d\n\r", val1, val2);
 
 
-		HAL_UART_Transmit(&huart1, (uint8_t*) msg_t, sizeof(msg_t), 1000);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg_t, sizeof(msg_t), 10);
 
 		val1 = humidity;
 		separa = humidity - val1;
@@ -1184,13 +1204,39 @@ void Proximity_Test(void *arguments)
 
   while(1)
   {
-
 	  	  aggiorna_contatore(&sharedValues);
 	  	  HAL_Delay(1000);
 
   }
 
 }
+
+
+void stampaDewpoint(struct sharedValues_t *sv){
+	 //osSemaphoreAcquire(sv->terzo, portMAX_DELAY);
+
+	 int dewpoint;
+	 char msg_d[30] = "";
+
+	 dewpoint = pow(sv->humidity_val1, 8)*(112+(0,9*sv->temperature_val1))+(0,1*sv->temperature_val1)-112;
+	 snprintf(msg_d,30," DEWPOINT = %d\n\r", dewpoint);
+	 HAL_UART_Transmit(&huart1, (uint8_t*) msg_d, sizeof(msg_d), 1000);
+
+	 //osSemaphoreRelease(sv->terzo);
+	 osDelay(500);
+}
+
+void StartDewpointTask(void *arguments){
+	/*USER CODE BEGIN StartDewpointTask*/
+	/* Infinite loop */
+	for(;;)
+	{
+		stampaDewpoint(&sharedValues);
+	}
+	/* USER CODE END StartDewpointTask */
+}
+
+
 
 /**
   * @brief  This function is executed in case of error occurrence.
