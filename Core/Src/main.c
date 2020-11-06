@@ -134,6 +134,25 @@ UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
+
+/* Definitions for serialPrintTask*/
+
+osThreadId_t serialTaskHandle;
+const osThreadAttr_t serialTask_attributes = {
+  .name = "serialTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 512 * 4
+};
+
+
+/* Definitions for statisticsTask*/
+osThreadId_t statisticsTaskHandle;
+const osThreadAttr_t statisticsTask_attributes = {
+  .name = "statisticsTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 232 * 4
+};
+
 /* Definitions for dewpointTask */
 osThreadId_t dewpointTaskHandle;
 const osThreadAttr_t dewpointTask_attributes = {
@@ -169,13 +188,32 @@ const osThreadAttr_t proximityThread_attributes = {
 struct sharedValues_t{
 int temperature_val1;
 int temperature_val2;
-float humidity_val1;
-float humidity_val2;
-float pressure_val1;
-float pressure_val2;
+float array_temp[5];
+float average_temerature;
+int n_elements_temp;
+int check_mean_temp;
+
+int humidity_val1;
+int humidity_val2;
+float array_humidity[5];
+float average_humidity;
+int n_elements_humidity;
+int check_mean_humidity;
+
+int pressure_val1;
+int pressure_val2;
+float array_pressure[5];
+float average_pressure;
+int n_elements_pressure;
+int check_mean_pressure;
+
 int proximity;
 int dewpoint;
+int enableDew;
 
+
+
+osSemaphoreId_t mutex;
 osSemaphoreId_t primo;
 osSemaphoreId_t secondo;
 
@@ -204,6 +242,8 @@ void StartDefaultTask(void *arguments);
 void StartTask02(void *arguments);
 void Proximity_Test(void *arguments);
 void StartDewpointTask(void *arguments);
+void ComputeStatistics(void *arguments);
+void SerialPrint(void *arguments);
 
 
 /* USER CODE BEGIN PFP */
@@ -216,17 +256,34 @@ void StartDewpointTask(void *arguments);
 
 
 void inizialize(struct sharedValues_t *sv){
-
+	int i;
 	sv->temperature_val1=0;
 	sv->temperature_val2=0;
+	sv->average_temerature=0;
+	sv->n_elements_temp=0;
+
+
 	sv->humidity_val1=0;
 	sv->humidity_val2=0;
+	sv->average_humidity=0;
+	sv->n_elements_humidity=0;
+
 	sv->pressure_val1=0;
 	sv->pressure_val2=0;
+	sv->average_pressure=0;
+	sv->n_elements_pressure=0;
+
 	sv->proximity=0;
 	sv->dewpoint=0;
+	sv->enableDew=0;
+
+	sv->check_mean_temp=0;
+	sv->check_mean_humidity=0;
+	sv->check_mean_pressure=0;
 
 
+
+	sv->mutex = osSemaphoreNew(1, 1, NULL);
 	sv->primo = osSemaphoreNew(1, 1, NULL);
 	sv->secondo = osSemaphoreNew(1, 1, NULL);
 
@@ -302,16 +359,20 @@ int main(void)
 	  /* USER CODE BEGIN RTOS_THREADS */
 	  //inizialize the structure
 	  inizialize(&sharedValues);
+
 	  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 	  myTask02Handle = osThreadNew(StartTask02, NULL, &myTask02_attributes);
 	  proximityThreadHandle = osThreadNew(Proximity_Test, NULL, &proximityThread_attributes);
 	  dewpointTaskHandle = osThreadNew(StartDewpointTask, NULL, &dewpointTask_attributes);
+	  statisticsTaskHandle = osThreadNew(ComputeStatistics, NULL, &statisticsTask_attributes);
+	  serialTaskHandle = osThreadNew(SerialPrint, NULL, &serialTask_attributes);
 
 	  /* USER CODE END RTOS_THREADS */
 
 	  /* Start scheduler */
+	HAL_GPIO_WritePin(ARD_D8_GPIO_Port, ARD_D8_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
 	  osKernelStart();
-
 
 }
 
@@ -956,68 +1017,68 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 			/*Initialize  WIFI module */
 			  if(WIFI_Init() ==  WIFI_STATUS_OK)
 			  {
-				TERMOUT("> WIFI Module Initialized.\n");
-				if(WIFI_GetMAC_Address(MAC_Addr) == WIFI_STATUS_OK)
-				{
-				  TERMOUT("> es-wifi module MAC Address : %X:%X:%X:%X:%X:%X\n",
-						   MAC_Addr[0],
-						   MAC_Addr[1],
-						   MAC_Addr[2],
-						   MAC_Addr[3],
-						   MAC_Addr[4],
-						   MAC_Addr[5]);
-				}
-				else
-				{
-				  TERMOUT("> ERROR : CANNOT get MAC address\n");
-				  BSP_LED_On(LED2);
-				}
-
-				if( WIFI_Connect(SSID, PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
-				{
-				  TERMOUT("> es-wifi module connected \n");
-				  if(WIFI_GetIP_Address(IP_Addr) == WIFI_STATUS_OK)
-				  {
-					TERMOUT("> es-wifi module got IP Address : %d.%d.%d.%d\n",
-						   IP_Addr[0],
-						   IP_Addr[1],
-						   IP_Addr[2],
-						   IP_Addr[3]);
-
-					TERMOUT("> Trying to connect to Server: %d.%d.%d.%d:%d ...\n",
-						   RemoteIP[0],
-						   RemoteIP[1],
-						   RemoteIP[2],
-						   RemoteIP[3],
-										 RemotePORT);
-
-					while (Trials--)
+					TERMOUT("> WIFI Module Initialized.\n");
+					if(WIFI_GetMAC_Address(MAC_Addr) == WIFI_STATUS_OK)
 					{
-					  if( WIFI_OpenClientConnection(0, WIFI_TCP_PROTOCOL, "TCP_CLIENT", RemoteIP, RemotePORT, 0) == WIFI_STATUS_OK)
-					  {
-						TERMOUT("> TCP Connection opened successfully.\n");
-						Socket = 0;
-						break;
-					  }
-
+					  TERMOUT("> es-wifi module MAC Address : %X:%X:%X:%X:%X:%X\n",
+							   MAC_Addr[0],
+							   MAC_Addr[1],
+							   MAC_Addr[2],
+							   MAC_Addr[3],
+							   MAC_Addr[4],
+							   MAC_Addr[5]);
 					}
-					if(Socket == -1)
+					else
 					{
-					  TERMOUT("> ERROR : Cannot open Connection\n");
+					  TERMOUT("> ERROR : CANNOT get MAC address\n");
 					  BSP_LED_On(LED2);
 					}
-				  }
-				  else
-				  {
-					TERMOUT("> ERROR : es-wifi module CANNOT get IP address\n");
-					BSP_LED_On(LED2);
-				  }
-				}
-				else
-				{
-				  TERMOUT("> ERROR : es-wifi module NOT connected\n");
-				  BSP_LED_On(LED2);
-				}
+
+					if( WIFI_Connect(SSID, PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
+					{
+					  TERMOUT("> es-wifi module connected \n");
+					  if(WIFI_GetIP_Address(IP_Addr) == WIFI_STATUS_OK)
+					  {
+						TERMOUT("> es-wifi module got IP Address : %d.%d.%d.%d\n",
+							   IP_Addr[0],
+							   IP_Addr[1],
+							   IP_Addr[2],
+							   IP_Addr[3]);
+
+						TERMOUT("> Trying to connect to Server: %d.%d.%d.%d:%d ...\n",
+							   RemoteIP[0],
+							   RemoteIP[1],
+							   RemoteIP[2],
+							   RemoteIP[3],
+											 RemotePORT);
+
+						while (Trials--)
+						{
+						  if( WIFI_OpenClientConnection(0, WIFI_TCP_PROTOCOL, "TCP_CLIENT", RemoteIP, RemotePORT, 0) == WIFI_STATUS_OK)
+						  {
+							TERMOUT("> TCP Connection opened successfully.\n");
+							Socket = 0;
+							break;
+						  }
+
+						}
+						if(Socket == -1)
+						{
+						  TERMOUT("> ERROR : Cannot open Connection\n");
+						  BSP_LED_On(LED2);
+						}
+					  }
+					  else
+					  {
+						TERMOUT("> ERROR : es-wifi module CANNOT get IP address\n");
+						BSP_LED_On(LED2);
+					  }
+					}
+					else
+					{
+					  TERMOUT("> ERROR : es-wifi module NOT connected\n");
+					  BSP_LED_On(LED2);
+					}
 			  }
 			  else
 			  {
@@ -1025,9 +1086,11 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 				BSP_LED_On(LED2);
 			  }
 
+
+
 			  while(1)
 			  {
-				 // osSemaphoreAcquire(primo, portMAX_DELAY);
+
 				if(Socket != -1)
 				{
 				  ret = WIFI_ReceiveData(Socket, RxData, sizeof(RxData)-1, &Datalen, WIFI_READ_TIMEOUT);
@@ -1044,38 +1107,50 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 
 					  //PROXIMITY
 					  if(ritorno == 0){
+						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 						  snprintf(text, 30, "Proximity value: %d \n", sv->proximity); // puts string into buffer
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+						  //wifi_http_get (uint8_t * hostname, uint8_t * path, uint32_t port_number )
+						  osSemaphoreRelease(sv->mutex);
 					  }
 
 					  //TEMPERATURE
 					  if(ritorno==1){
+						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 						  snprintf(text,30," Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+						  osSemaphoreRelease(sv->mutex);
 					  }
 
 					  //HUMIDITY
 					  if(ritorno==2){
+						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 						  snprintf(text,30," Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+						  osSemaphoreRelease(sv->mutex);
 					  }
 
 					  //PRESSSURE 1mBar = 1hPa (100Pa)
 					  if(ritorno==3){
+						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 						  snprintf(text,30," Pressure = %d.%02d hPa\n\r", sv->pressure_val1, sv->pressure_val2);
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+						  osSemaphoreRelease(sv->mutex);
 					  }
 
 					  if(ritorno==4){
+						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 						  snprintf(text,30," Dewpoint = %d\n\r", sv->dewpoint);
 						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+						  osSemaphoreRelease(sv->mutex);
 
 		              }
 
-
-						  if (ret != WIFI_STATUS_OK)
+					if (ret != WIFI_STATUS_OK)
 					  {
 						TERMOUT("> ERROR : Failed to Send Data, connection closed\n");
+						 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
+
 						break;
 					  }
 					}
@@ -1083,24 +1158,23 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 				  else
 				  {
 					TERMOUT("> ERROR : Failed to Receive Data, connection closed\n");
+					 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
+
 					break;
 				  }
 				}
-				 //osSemaphoreRelease(secondo);
+				HAL_Delay(500);
+
 			  }
 
-
-
-
 }
+
 
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *arguments)
 {
 
 	controlla_valori_telefono(&sharedValues);
-
-
 
 }
 
@@ -1112,8 +1186,9 @@ void StartDefaultTask(void *arguments)
 */
 /* USER CODE END Header_StartTask02 */
 
+//Aggiorna i valori dei sensori così se vengono richiesti dall'app sono consistenti
 void stampa(struct sharedValues_t *sv){
-	 osSemaphoreAcquire(sv->secondo, portMAX_DELAY);
+	 osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 
 		float temperature,humidity,pressure;
 		float separa = 0;
@@ -1126,42 +1201,51 @@ void stampa(struct sharedValues_t *sv){
 		humidity = BSP_HSENSOR_ReadHumidity();
 		pressure = BSP_PSENSOR_ReadPressure();
 
-		if(temperature>29)
-					HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-
-
-
+		if(temperature>27){
+			HAL_GPIO_WritePin(ARD_D5_GPIO_Port, ARD_D5_Pin, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(ARD_D10_GPIO_Port, ARD_D10_Pin, GPIO_PIN_SET);
+		}
+		else{
+			HAL_GPIO_WritePin(ARD_D5_GPIO_Port, ARD_D5_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(ARD_D10_GPIO_Port, ARD_D10_Pin, GPIO_PIN_RESET);
+		}
+//temperature
 		val1 = temperature;
 		separa = temperature - val1;
 		val2 = trunc(separa * 100);
 		sv->temperature_val1 = val1;
 		sv->temperature_val2 = val2;
-		snprintf(msg_t,30," TEMPERATURE = %d.%02d\n\r", val1, val2);
+		if(sv->n_elements_temp<5){
+			sv->array_temp[sv->n_elements_temp]=temperature;
+			sv->n_elements_temp += 1;
 
+		}
 
-		HAL_UART_Transmit(&huart1, (uint8_t*) msg_t, sizeof(msg_t), 10);
-
+//humidity
 		val1 = humidity;
 		separa = humidity - val1;
 		val2 = trunc(separa * 100);
 		sv->humidity_val1 = val1;
 		sv->humidity_val2 = val2;
-		snprintf(msg_h,30," humidity = %d.%02d\n\r", val1, val2);
-		HAL_UART_Transmit(&huart1, (uint8_t*) msg_h, sizeof(msg_h), 1000);
+		if(sv->n_elements_humidity<5){
+			sv->array_humidity[sv->n_elements_humidity]=humidity;
+			sv->n_elements_humidity +=1;
+		}
 
-
+//pressure
 		val1 = pressure;
 		separa = pressure - val1;
 		val2 = trunc(separa * 100);
 		sv->pressure_val1 = val1;
 		sv->pressure_val2 = val2;
-		snprintf(msg_p,30," pressure = %d.%02d\n\r", val1, val2);
-		HAL_UART_Transmit(&huart1, (uint8_t*) msg_p, sizeof(msg_p), 1000);
+		if(sv->n_elements_pressure<5){
+			sv->array_pressure[sv->n_elements_pressure]=pressure;
+			sv->n_elements_pressure +=1;
+		}
 
 
+	  osSemaphoreRelease(sv->mutex);
 
-  osSemaphoreRelease(sv->secondo);
-  osDelay(500);
 }
 void StartTask02(void *arguments)
 {
@@ -1169,8 +1253,8 @@ void StartTask02(void *arguments)
   /* Infinite loop */
   for(;;)
   {
-
 	  stampa(&sharedValues);
+	  osDelay(500);
   }
   /* USER CODE END StartTask02 */
 }
@@ -1180,9 +1264,8 @@ void aggiorna_contatore(struct sharedValues_t *sv){
 	uint16_t prox_value = 0;
 
 
-
 	//prendo il mutex
-	osSemaphoreAcquire(sv->primo, portMAX_DELAY);
+	osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 
 	prox_value = VL53L0X_PROXIMITY_GetDistance();
 	printf("DISTANCE is = %d mm \n", prox_value);
@@ -1190,7 +1273,7 @@ void aggiorna_contatore(struct sharedValues_t *sv){
 	sv->proximity = prox_value;
 	if(prox_value<100)
 		HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-	osSemaphoreRelease(sv->primo);
+	osSemaphoreRelease(sv->mutex);
 
 }
 
@@ -1211,19 +1294,23 @@ void Proximity_Test(void *arguments)
 
 }
 
-
+//acquisisce il tasto e stampa su seriale il valore di rugiada calcolato
 void stampaDewpoint(struct sharedValues_t *sv){
-	 //osSemaphoreAcquire(sv->terzo, portMAX_DELAY);
 
-	 int dewpoint;
-	 char msg_d[30] = "";
 
-	 dewpoint = pow(sv->humidity_val1, 8)*(112+(0,9*sv->temperature_val1))+(0,1*sv->temperature_val1)-112;
-	 snprintf(msg_d,30," DEWPOINT = %d\n\r", dewpoint);
-	 HAL_UART_Transmit(&huart1, (uint8_t*) msg_d, sizeof(msg_d), 1000);
+		osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 
-	 //osSemaphoreRelease(sv->terzo);
-	 osDelay(500);
+		if(sv->enableDew==1){
+			int dewpoint;
+			char msg_d[30] = "";
+			dewpoint = pow(sv->humidity_val1/100, 0.125)*(112+(0.9*sv->temperature_val1))+(0.1*sv->temperature_val1)-112;
+			snprintf(msg_d,30," DEWPOINT = %d\n\r", dewpoint);
+			HAL_UART_Transmit(&huart1, (uint8_t*) msg_d, sizeof(msg_d), 1000);
+			sv->enableDew=0;
+		}
+		osSemaphoreRelease(sv->mutex);
+
+
 }
 
 void StartDewpointTask(void *arguments){
@@ -1232,8 +1319,120 @@ void StartDewpointTask(void *arguments){
 	for(;;)
 	{
 		stampaDewpoint(&sharedValues);
+		 osDelay(500);
 	}
 	/* USER CODE END StartDewpointTask */
+}
+
+//Faccio statistiche sui dati campionati e salvati da altri thread
+void computeAndUpdate(struct sharedValues_t *sv){
+	int i;
+
+	osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
+	if(sv->n_elements_temp==5){
+		sv->average_temerature=0;
+		for(i=0;i<5;i++){
+			sv->average_temerature = sv->average_temerature + sv->array_temp[i];
+		}
+
+		sv->average_temerature = sv->average_temerature / 5;
+		sv->check_mean_temp=1;
+	}
+
+
+	if(sv->n_elements_pressure==5){
+		sv->average_pressure=0;
+		for(i=0;i<5;i++){
+			sv->average_pressure = sv->average_pressure + sv->array_pressure[i];
+		}
+		sv->average_pressure = sv->average_pressure / 5;
+		sv->check_mean_pressure=1;
+	}
+
+
+	if(sv->n_elements_humidity==5){
+		sv->average_humidity=0;
+		for(i=0;i<5;i++){
+			sv->average_humidity = sv->average_humidity + sv->array_humidity[i];
+		}
+		sv->average_humidity = sv->average_humidity / 5;
+		sv->check_mean_humidity=1;
+	}
+
+	osSemaphoreRelease(sv->mutex);
+
+}
+
+void ComputeStatistics(void *arguments){
+
+	for(;;){
+		computeAndUpdate(&sharedValues);
+
+		osDelay(1000);
+	}
+}
+
+//stampa valori sulla seria, quando disponibili stampa anche i valori statistici
+void checkAndPrint(struct sharedValues_t *sv){
+
+	osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
+
+	char msg[100] = "";
+	int i;
+	float separa;
+	int val1,val2;
+
+
+	snprintf(msg,100,"Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 10);
+
+	snprintf(msg,100,"Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+
+	snprintf(msg,100,"Pressure = %d.%02d\n\r", sv->pressure_val1, sv->pressure_val2);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+
+	if(sv->n_elements_temp==5 && sv->check_mean_temp==1 ){
+		val1 = sv->average_temerature;
+		separa = sv->average_temerature - val1;
+		val2 = trunc(separa * 100);
+		snprintf(msg,100,"Average Temperature = %d.%02d\n\r", val1, val2);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+		sv->n_elements_temp=0;
+		sv->check_mean_temp=0;
+	}
+
+	if(sv->n_elements_humidity==5 && sv->check_mean_humidity==1){
+		val1 = sv->average_humidity;
+		separa = sv->average_humidity - val1;
+		val2 = trunc(separa * 100);
+		snprintf(msg,100,"Average Humidity = %d.%02d\n\r", val1, val2);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+		sv->n_elements_humidity=0;
+		sv->check_mean_humidity=0;
+	}
+
+	if(sv->n_elements_pressure==5 && sv->check_mean_pressure==1){
+		val1 = sv->average_pressure;
+		separa = sv->average_pressure - val1;
+		val2 = trunc(separa * 100);
+		snprintf(msg,100,"Average Pressure = %d.%02d\n\r", val1, val2);
+		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+		sv->n_elements_pressure=0;
+		sv->check_mean_pressure=0;
+	}
+	osSemaphoreRelease(sv->mutex);
+}
+
+
+void SerialPrint(void *arguments){
+
+
+	for(;;){
+
+		checkAndPrint(&sharedValues);
+		osDelay(2000);
+	}
 }
 
 
@@ -1267,6 +1466,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   switch (GPIO_Pin)
@@ -1276,6 +1476,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       SPI_WIFI_ISR();
       break;
     }
+    case (BUTTON_EXTI13_Pin):
+    {
+    	if (HAL_GPIO_ReadPin(BUTTON_EXTI13_GPIO_Port, BUTTON_EXTI13_Pin) != GPIO_PIN_SET){
+    		sharedValues.enableDew=1;
+    	}
+    }
+
     default:
     {
       break;
