@@ -1000,19 +1000,101 @@ static void VL53L0X_PROXIMITY_MspInit(void)
   * @retval None
   */
 
-void controlla_valori_telefono(struct sharedValues_t *sv){
-
+int controlla_valori_telefono(struct sharedValues_t *sv, int32_t Socket){
 	uint8_t TxData[] = "STM32 : Hello!\n";
-			int32_t ret;
-			uint16_t Datalen;
+	int32_t ret;
+	uint16_t Datalen;
+	char text[30];
+
+
+	while(1){
+
+
+		  ret = WIFI_ReceiveData(Socket, RxData, sizeof(RxData)-1, &Datalen, WIFI_READ_TIMEOUT);
+
+
+		  if(ret == WIFI_STATUS_OK){
+
+			if(Datalen > 0){
+				osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
+				  RxData[Datalen]=0;
+				  TERMOUT("Received: %s\n",RxData);
+				  int ritorno = atoi(RxData);
+
+				  if(ritorno==45){
+					  ret = WIFI_SendData(Socket, TxData, sizeof(TxData), &Datalen, WIFI_WRITE_TIMEOUT);
+				  }
+
+				  //PROXIMITY
+				  if(ritorno == 0){
+					  snprintf(text, 30, "Proximity value: %d \n", sv->proximity); // puts string into buffer
+					  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+					  //wifi_http_get (uint8_t * hostname, uint8_t * path, uint32_t port_number )
+				  }
+
+				  //TEMPERATURE
+				  if(ritorno==1){
+					  snprintf(text,30," Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
+					  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+				  }
+
+				  //HUMIDITY
+				  if(ritorno==2){
+					  snprintf(text,30," Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
+					  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+				  }
+
+				  //PRESSSURE 1mBar = 1hPa (100Pa)
+				  if(ritorno==3){
+					  snprintf(text,30," Pressure = %d.%02d hPa\n\r", sv->pressure_val1, sv->pressure_val2);
+					  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+				  }
+
+				  if(ritorno==4){
+					  snprintf(text,30," Dewpoint = %d\n\r", sv->dewpoint);
+					  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
+
+
+				  }
+				  osSemaphoreRelease(sv->mutex);
+				  //if we had any problems the mutex won't be used
+				  if (ret != WIFI_STATUS_OK){
+					TERMOUT("> ERROR : Failed to Send Data, connection closed\n");
+					 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
+
+					break;
+				  }
+				}
+		  }
+		  else
+		  {
+			TERMOUT("> ERROR : Failed to Receive Data, connection closed\n");
+			 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
+			 break;
+		  }
+
+		  HAL_Delay(500);
+	}
+
+		  return 1;
+}
+
+
+
+
+
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *arguments)
+{
+
+	while(1){
 			uint8_t  MAC_Addr[6];
 			uint8_t  IP_Addr[4];
-			char msg[30] = "";
 
 			int32_t Socket = -1;
 
 			int16_t Trials = CONNECTION_TRIAL_MAX;
-			char text[30];
+
 
 			/*Initialize  WIFI module */
 			  if(WIFI_Init() ==  WIFI_STATUS_OK)
@@ -1058,6 +1140,7 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 						  {
 							TERMOUT("> TCP Connection opened successfully.\n");
 							Socket = 0;
+							 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_RESET);
 							break;
 						  }
 
@@ -1087,95 +1170,26 @@ void controlla_valori_telefono(struct sharedValues_t *sv){
 			  }
 
 
+		if(Socket!=-1){
+			int error_connession=0;
+			for(;;){
 
-			  while(1)
-			  {
+				error_connession = controlla_valori_telefono(&sharedValues,Socket);
 
-				if(Socket != -1)
-				{
-				  ret = WIFI_ReceiveData(Socket, RxData, sizeof(RxData)-1, &Datalen, WIFI_READ_TIMEOUT);
-				  if(ret == WIFI_STATUS_OK)
-				  {
-					if(Datalen > 0)
-					{
-					  RxData[Datalen]=0;
-					  TERMOUT("Received: %s\n",RxData);
-					  int ritorno = atoi(RxData);
-					  if(ritorno==45){
-						  ret = WIFI_SendData(Socket, TxData, sizeof(TxData), &Datalen, WIFI_WRITE_TIMEOUT);
-					  }
-
-					  //PROXIMITY
-					  if(ritorno == 0){
-						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
-						  snprintf(text, 30, "Proximity value: %d \n", sv->proximity); // puts string into buffer
-						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-						  //wifi_http_get (uint8_t * hostname, uint8_t * path, uint32_t port_number )
-						  osSemaphoreRelease(sv->mutex);
-					  }
-
-					  //TEMPERATURE
-					  if(ritorno==1){
-						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
-						  snprintf(text,30," Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
-						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-						  osSemaphoreRelease(sv->mutex);
-					  }
-
-					  //HUMIDITY
-					  if(ritorno==2){
-						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
-						  snprintf(text,30," Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
-						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-						  osSemaphoreRelease(sv->mutex);
-					  }
-
-					  //PRESSSURE 1mBar = 1hPa (100Pa)
-					  if(ritorno==3){
-						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
-						  snprintf(text,30," Pressure = %d.%02d hPa\n\r", sv->pressure_val1, sv->pressure_val2);
-						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-						  osSemaphoreRelease(sv->mutex);
-					  }
-
-					  if(ritorno==4){
-						  osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
-						  snprintf(text,30," Dewpoint = %d\n\r", sv->dewpoint);
-						  ret = WIFI_SendData(Socket, text, sizeof(text), &Datalen, WIFI_WRITE_TIMEOUT);
-						  osSemaphoreRelease(sv->mutex);
-
-		              }
-
-					if (ret != WIFI_STATUS_OK)
-					  {
-						TERMOUT("> ERROR : Failed to Send Data, connection closed\n");
-						 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
-
-						break;
-					  }
-					}
-				  }
-				  else
-				  {
-					TERMOUT("> ERROR : Failed to Receive Data, connection closed\n");
-					 HAL_GPIO_WritePin(ARD_D9_GPIO_Port, ARD_D9_Pin, GPIO_PIN_SET);//0
-
+				//if we have an error after reaching the connection, we try to connect the board again
+				//it will always be 1
+				if(error_connession==1){
+					//wait 3 seconds and try to connect to the device again
+					HAL_Delay(3000);
 					break;
-				  }
 				}
-				HAL_Delay(500);
 
-			  }
+			}
+		}
 
-}
-
-
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *arguments)
-{
-
-	controlla_valori_telefono(&sharedValues);
-
+	//wait 5 seconds and try to connect to the device again
+	HAL_Delay(5000);
+	}
 }
 
 /* USER CODE BEGIN Header_StartTask02 */
@@ -1193,9 +1207,7 @@ void stampa(struct sharedValues_t *sv){
 		float temperature,humidity,pressure;
 		float separa = 0;
 		int val1,val2;
-		char msg_t[30] = "";
-		char msg_h[30] = "";
-		char msg_p[30] = "";
+
 
 		temperature = BSP_TSENSOR_ReadTemp();
 		humidity = BSP_HSENSOR_ReadHumidity();
@@ -1268,7 +1280,7 @@ void aggiorna_contatore(struct sharedValues_t *sv){
 	osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 
 	prox_value = VL53L0X_PROXIMITY_GetDistance();
-	printf("DISTANCE is = %d mm \n", prox_value);
+	//printf("DISTANCE is = %d mm \n", prox_value);
 
 	sv->proximity = prox_value;
 	if(prox_value<100)
@@ -1296,14 +1308,19 @@ void Proximity_Test(void *arguments)
 
 //acquisisce il tasto e stampa su seriale il valore di rugiada calcolato
 void stampaDewpoint(struct sharedValues_t *sv){
-
+	int dewpoint=-1;
+	char msg_d[30] = "";
+	float hum_f,temp_f;
 
 		osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 
+		hum_f = sv->humidity_val1;
+		temp_f = sv->temperature_val1;
+		dewpoint = (pow(hum_f/100, 0.125)*(112+temp_f*0.9)+(0.1*temp_f)-112);
+		sv->dewpoint=dewpoint;
+
 		if(sv->enableDew==1){
-			int dewpoint;
-			char msg_d[30] = "";
-			dewpoint = pow(sv->humidity_val1/100, 0.125)*(112+(0.9*sv->temperature_val1))+(0.1*sv->temperature_val1)-112;
+
 			snprintf(msg_d,30," DEWPOINT = %d\n\r", dewpoint);
 			HAL_UART_Transmit(&huart1, (uint8_t*) msg_d, sizeof(msg_d), 1000);
 			sv->enableDew=0;
@@ -1319,7 +1336,7 @@ void StartDewpointTask(void *arguments){
 	for(;;)
 	{
 		stampaDewpoint(&sharedValues);
-		 osDelay(500);
+		 osDelay(1000);
 	}
 	/* USER CODE END StartDewpointTask */
 }
@@ -1378,19 +1395,31 @@ void checkAndPrint(struct sharedValues_t *sv){
 	osSemaphoreAcquire(sv->mutex, portMAX_DELAY);
 
 	char msg[100] = "";
+	char msg1[100] = "";
+	char msg2[100] = "";
+	char msg3[100] = "";
+	char msg4[100] = "";
+
 	int i;
 	float separa;
 	int val1,val2;
 
 
-	snprintf(msg,100,"Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
-	HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 10);
+	snprintf(msg1,100,"Temperature = %d.%02d\n\r", sv->temperature_val1, sv->temperature_val2);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg1, sizeof(msg1), 1000);
 
-	snprintf(msg,100,"Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
-	HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
 
-	snprintf(msg,100,"Pressure = %d.%02d\n\r", sv->pressure_val1, sv->pressure_val2);
-	HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+	snprintf(msg2,100,"Humidity = %d.%02d\n\r", sv->humidity_val1, sv->humidity_val2);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg2, sizeof(msg2), 1000);
+
+
+	snprintf(msg3,100,"Pressure = %d.%02d hPa\n\r", sv->pressure_val1, sv->pressure_val2);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg3, sizeof(msg3), 1000);
+
+
+	snprintf(msg4,100,"Distance = %d mm\n\r", sv->proximity);
+	HAL_UART_Transmit(&huart1, (uint8_t*) msg4, sizeof(msg4), 1000);
+
 
 	if(sv->n_elements_temp==5 && sv->check_mean_temp==1 ){
 		val1 = sv->average_temerature;
@@ -1398,6 +1427,7 @@ void checkAndPrint(struct sharedValues_t *sv){
 		val2 = trunc(separa * 100);
 		snprintf(msg,100,"Average Temperature = %d.%02d\n\r", val1, val2);
 		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+
 		sv->n_elements_temp=0;
 		sv->check_mean_temp=0;
 	}
@@ -1408,6 +1438,7 @@ void checkAndPrint(struct sharedValues_t *sv){
 		val2 = trunc(separa * 100);
 		snprintf(msg,100,"Average Humidity = %d.%02d\n\r", val1, val2);
 		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+
 		sv->n_elements_humidity=0;
 		sv->check_mean_humidity=0;
 	}
@@ -1418,6 +1449,7 @@ void checkAndPrint(struct sharedValues_t *sv){
 		val2 = trunc(separa * 100);
 		snprintf(msg,100,"Average Pressure = %d.%02d\n\r", val1, val2);
 		HAL_UART_Transmit(&huart1, (uint8_t*) msg, sizeof(msg), 1000);
+
 		sv->n_elements_pressure=0;
 		sv->check_mean_pressure=0;
 	}
