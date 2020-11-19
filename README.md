@@ -34,7 +34,7 @@ Complete Report: [Link](https://github.com/efenocchi/STM32-new_project/blob/mast
 ![Fig.1](https://github.com/efenocchi/STM32-new_project/blob/master/pictures/board.jpg)
 
 
-Complete Report: [Link](https://github.com/apanariello4/vision-project/blob/master/report/report.pdf)
+
 # Credits
 
 | Author  | GitHub |  LinkedIn |
