@@ -36,8 +36,8 @@
 
 /* Update SSID and PASSWORD with own Access point settings */
 
-//#define SSID
-//#define PASSWORD ""
+//#define SSID "your SSID"
+//#define PASSWORD "your password"
 
 
 uint8_t RemoteIP[] = {192,168,43,10};
